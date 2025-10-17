@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人体工学办公设备调整工具</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.5; }
+label { display: block; margin-top: 10px; }
+input { margin-top: 5px; padding: 5px; width: 200px; }
+.red { color: red; }
+button { margin-top: 15px; padding: 8px 15px; cursor: pointer; }
+#report { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<h2>人体工学办公设备调整工具</h2>
+
+<div id="modeSelect">
+  <button onclick="selectMode('user')">用户选项</button>
+  <button onclick="selectMode('edit')">编辑选项</button>
+</div>
+
+<div id="authDiv" class="hidden">
+  <label>请输入口令查看核心参数: <input type="password" id="authInput"><button onclick="checkAuth()">确认</button></label>
+</div>
+
+<div id="mainApp" class="hidden">
+  <label>本次登录参加哪一轮测试？ 
+    <select id="roundSelect">
+      <option value="1">第1轮</option>
+      <option value="2">第2轮</option>
+    </select>
+  </label>
+
+  <!-- 第一轮表单 -->
+  <div id="firstRoundForm">
+    <h3>第一轮测试：必要条件输入</h3>
+    <label>升降桌高度可变范围 (mm) <span class="red">*</span>
+      <input type="text" id="deskRange" placeholder="例如：700-1200">
+    </label>
+    <label>升降椅高度可变范围 (mm) <span class="red">*</span>
+      <input type="text" id="chairRange" placeholder="例如：400-600">
+    </label>
+    <label>电脑屏幕高度 (mm) <span class="red">*</span>
+      <input type="number" id="screenHeight">
+    </label>
+    <label>电脑支架可调高度范围 (mm) <span class="red">*</span>
+      <input type="text" id="screenStandRange" placeholder="例如：0-200">
+    </label>
+    <label>屏幕对角线长度 (mm) <span class="red">*</span>
+      <input type="number" id="screenDiagonal">
+    </label>
+    <label>用户身高 (mm) <span class="red">*</span>
+      <input type="number" id="userHeight">
+    </label>
+    <button onclick="runFirstRound()">生成第一轮建议</button>
+  </div>
+
+  <!-- 第二轮表单 -->
+  <div id="secondRoundForm" class="hidden">
+    <h3>第二轮测试：调整关键数据 (单位 mm)</h3>
+    <h4>坐姿调整</h4>
+    <label>升降桌高度 (mm) <span class="red">*</span>
+      <input type="number" id="deskSit">
+    </label>
+    <label>升降椅高度 (mm) <span class="red">*</span>
+      <input type="number" id="chairSit">
+    </label>
+    <label>屏幕对角线长度 (mm) <span class="red">*</span>
+      <input type="number" id="screenDiagonalSit">
+    </label>
+    <label>视距 (眼到屏幕) (mm) <span class="red">*</span>
+      <input type="number" id="viewDistanceSit">
+    </label>
+    <label>屏幕固定高度 (mm) <span class="red">*</span>
+      <input type="number" id="screenHeightSit">
+    </label>
+    <label>电脑支架可调范围 (mm) <span class="red">*</span>
+      <input type="text" id="screenStandRangeSit" placeholder="例如：0-200">
+    </label>
+    <label>身高 (mm) <span class="red">*</span>
+      <input type="number" id="userHeightSit">
+    </label>
+
+    <h4>站姿调整</h4>
+    <label>升降桌高度 (mm) <span class="red">*</span>
+      <input type="number" id="deskStand">
+    </label>
+    <label>升降椅高度 (mm) <span class="red">*</span>
+      <input type="number" id="chairStand">
+    </label>
+    <label>屏幕对角线长度 (mm) <span class="red">*</span>
+      <input type="number" id="screenDiagonalStand">
+    </label>
+    <label>视距 (眼到屏幕) (mm) <span class="red">*</span>
+      <input type="number" id="viewDistanceStand">
+    </label>
+    <label>屏幕固定高度 (mm) <span class="red">*</span>
+      <input type="number" id="screenHeightStand">
+    </label>
+    <label>电脑支架可调范围 (mm) <span class="red">*</span>
+      <input type="text" id="screenStandRangeStand" placeholder="例如：0-200">
+    </label>
+    <label>身高 (mm) <span class="red">*</span>
+      <input type="number" id="userHeightStand">
+    </label>
+
+    <button onclick="runSecondRound()">生成第二轮建议</button>
+  </div>
+
+  <div id="report"></div>
+</div>
+
+<script>
+let isEditor = false;
+let sitElbowCoef, standElbowCoef;
+
+function selectMode(mode){
+  if(mode==='user'){
+    generateCoreParams();
+    document.getElementById('mainApp').classList.remove('hidden');
+  } else {
+    document.getElementById('authDiv').classList.remove('hidden');
+  }
+}
+
+function checkAuth(){
+  const val = document.getElementById('authInput').value;
+  if(val==='4799'){
+    isEditor = true;
+    generateCoreParams();
+    document.getElementById('authDiv').classList.add('hidden');
+    document.getElementById('mainApp').classList.remove('hidden');
+  } else {
+    alert('口令错误');
+  }
+}
+
+function generateCoreParams(){
+  // 动态生成核心参数
+  sitElbowCoef = (0.38 + Math.random()*0.02).toFixed(3); // 0.38~0.40
+  standElbowCoef = (0.64 + Math.random()*0.02).toFixed(3); // 0.64~0.66
+}
+
+// 控制显示表单
+document.getElementById('roundSelect').addEventListener('change', function() {
+  const val = this.value;
+  document.getElementById('firstRoundForm').classList.toggle('hidden', val !== '1');
+  document.getElementById('secondRoundForm').classList.toggle('hidden', val !== '2');
+});
+
+function parseRange(str){
+  const parts = str.split('-').map(Number);
+  if(parts.length===2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0]<=parts[1]){
+    return {min: parts[0], max: parts[1]};
+  }
+  return null;
+}
+
+// 第一轮
+function runFirstRound(){
+  const deskRange = parseRange(document.getElementById('deskRange').value);
+  const chairRange = parseRange(document.getElementById('chairRange').value);
+  const screenHeight = Number(document.getElementById('screenHeight').value);
+  const screenStandRange = parseRange(document.getElementById('screenStandRange').value);
+  const screenDiagonal = Number(document.getElementById('screenDiagonal').value);
+  const userHeight = Number(document.getElementById('userHeight').value);
+
+  if(!deskRange || !chairRange || isNaN(screenHeight) || !screenStandRange || isNaN(screenDiagonal) || isNaN(userHeight)){
+    alert("请正确填写所有必填项。");
+    return;
+  }
+
+  const sitElbow = Math.round(userHeight * sitElbowCoef);
+  const standElbow = Math.round(userHeight * standElbowCoef);
+
+  const deskSitMin = sitElbow + 50;
+  const deskSitMax = sitElbow + 100;
+  const deskStandMin = standElbow + 50;
+  const deskStandMax = standElbow + 100;
+
+  const keyboardSit = sitElbow;
+  const keyboardStand = standElbow;
+
+  const chairSitMin = Math.max(chairRange.min, deskSitMin - 400);
+  const chairSitMax = Math.min(chairRange.max, deskSitMax - 350);
+  const chairStandMin = Math.max(chairRange.min, deskStandMin - 450);
+  const chairStandMax = Math.min(chairRange.max, deskStandMax - 400);
+
+  const screenTop = screenHeight + Math.round((screenStandRange.min + screenStandRange.max)/2);
+
+  const report = `
+<h3>第一轮建议报告</h3>
+<p>坐姿办公：</p>
+<ul>
+  <li>桌面高度建议范围: ${deskSitMin} - ${deskSitMax} mm</li>
+  <li>键盘高度: ${keyboardSit} mm</li>
+  <li>椅子高度建议范围: ${chairSitMin} - ${chairSitMax} mm</li>
+  <li>屏幕顶缘高度: ${screenTop} mm</li>
+</ul>
+<p>站姿办公：</p>
+<ul>
+  <li>桌面高度建议范围: ${deskStandMin} - ${deskStandMax} mm</li>
+  <li>键盘高度: ${keyboardStand} mm</li>
+  <li>椅子高度建议范围: ${chairStandMin} - ${chairStandMax} mm</li>
+  <li>屏幕顶缘高度: ${screenTop} mm</li>
+</ul>
+<button onclick="downloadReport('第一轮建议报告.txt')">下载第一轮建议报告</button>
+<p>说明：长度单位默认为 mm。系统不保留数据，建议在每轮完成后下载报告。</p>
+  `;
+  document.getElementById('report').innerHTML = report;
+}
+
+function downloadReport(filename){
+  const reportContent = document.getElementById('report').innerText;
+  const blob = new Blob([reportContent], {type: 'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// 第二轮
+function runSecondRound(){
+  const userHeightSit = Number(document.getElementById('userHeightSit').value);
+  const userHeightStand = Number(document.getElementById('userHeightStand').value);
+  if(isNaN(userHeightSit) || isNaN(userHeightStand)){
+    alert("请填写身高等必填项");
+    return;
+  }
+
+  const sitElbow = Math.round(userHeightSit * sitElbowCoef);
+  const standElbow = Math.round(userHeightStand * standElbowCoef);
+
+  const deskSit = Number(document.getElementById('deskSit').value) || sitElbow + 75;
+  const chairSit = Number(document.getElementById('chairSit').value) || deskSit - sitElbow;
+  const screenSit = Number(document.getElementById('screenHeightSit').value) + 100;
+  const keyboardSit = sitElbow;
+
+  const deskStand = Number(document.getElementById('deskStand').value) || standElbow + 75;
+  const chairStand = Number(document.getElementById('chairStand').value) || deskStand - standElbow;
+  const screenStand = Number(document.getElementById('screenHeightStand').value) + 100;
+  const keyboardStand = standElbow;
+
+  const reportContent = `
+<h3>第二轮建议报告</h3>
+<p>坐姿办公：</p>
+<ul>
+  <li>桌面高度建议: ${deskSit} mm</li>
+  <li>键盘高度: ${keyboardSit} mm</li>
+  <li>椅子高度建议: ${chairSit} mm</li>
+  <li>屏幕顶缘高度: ${screenSit} mm</li>
+</ul>
+<p>站姿办公：</p>
+<ul>
+  <li>桌面高度建议: ${deskStand} mm</li>
+  <li>键盘高度: ${keyboardStand} mm</li>
+  <li>椅子高度建议: ${chairStand} mm</li>
+  <li>屏幕顶缘高度: ${screenStand} mm</li>
+</ul>
+<p>说明：长度单位默认为 mm。系统不保留数据，建议在每轮完成后下载报告。</p>
+`;
+
+  const reportDiv = document.getElementById('report');
+  reportDiv.innerHTML = reportContent;
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.textContent = "下载第二轮建议报告";
+  downloadBtn.onclick = function(){
+    const blob = new Blob([reportContent.replace(/<[^>]+>/g, '')], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '第二轮建议报告.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  reportDiv.appendChild(downloadBtn);
+}
+</script>
+</body>
+</html>
